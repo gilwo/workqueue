@@ -46,17 +46,17 @@ func (q *Queue) Enqueue(data interface{}) {
 	q.count += 1
 }
 
-func (q *Queue) Dequeue() (data interface{}, err error) {
+func (q *Queue) Dequeue() (data interface{}, ok bool) {
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
 	if q.count == 0 {
-		err = fmt.Errorf("queue is empty")
+		ok = false
 		data = nil
 		return
 	}
 
-	err = nil
+	ok = true
 	data = q.q[0].data
 	q.q = q.q[1:]
 	q.count -= 1
@@ -64,17 +64,17 @@ func (q *Queue) Dequeue() (data interface{}, err error) {
 	return
 }
 
-func (q *Queue) Peek() (data interface{}, err error) {
+func (q *Queue) Peek() (data interface{}, ok bool) {
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
 	if q.count == 0 {
-		err = fmt.Errorf("queue is empty")
+		ok = false
 		data = nil
 		return
 	}
 
-	err = nil
+	ok = true
 	data = q.q[0].data
 
 	return

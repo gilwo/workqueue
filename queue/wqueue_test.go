@@ -45,15 +45,8 @@ func TestPushAndPop(t *testing.T) {
 		t.Errorf("value pushed and poped mismatch, pushed: %d, poped %d", data, v1)
 	}
 
-	if _, err := q.Dequeue(); err == nil {
+	if _, ok := q.Dequeue(); ok {
 		t.Errorf("Empty Queue invalid Dequeue")
-	} else {
-		act := err.Error()
-		exp := "queue is empty"
-		if act != exp {
-			t.Errorf("Queue invalid Dequeue error mismatch, actual: '%s', expected: '%s'",
-				act, exp)
-		}
 	}
 
 	q.Dispose()
@@ -91,29 +84,17 @@ func TestPeek(t *testing.T) {
 		t.Errorf("queue count, actual: %d, expected: 0", c)
 	}
 
-	d, err := q.Peek()
-	if err == nil {
+	d, ok := q.Peek()
+	if ok {
 		t.Errorf("empty queue peek failed, expected: nil, actual: %v", d)
-	} else {
-		act := err.Error()
-		exp := "queue is empty"
-		if act != exp {
-			t.Errorf("Queue invalid peek error mismatch, actual: '%s', expected: '%s'",
-				act, exp)
-		}
 	}
 
 	var data int32 = 1
 	q.Enqueue(data)
 
-	d, err = q.Peek()
-	if err != nil {
-		t.Errorf("queue peek failed, error %s", err)
-	} else {
-		if d.(int32) != data {
-			t.Errorf("Queue invalid peek, actual: %v, expected: %v",
-				d, 1)
-		}
+	d, ok = q.Peek()
+	if !ok {
+		t.Errorf("queue peek on non empty queue, expected %v", data)
 	}
 
 	q.Dispose()
@@ -131,17 +112,11 @@ func TestQueueClear(t *testing.T) {
 
 	q.Clear()
 
-	d, err := q.Peek()
-	if err == nil {
+	d, ok := q.Peek()
+	if ok {
 		t.Errorf("cleared queue peek failed, expected: nil, actual: %v", d)
-	} else {
-		act := err.Error()
-		exp := "queue is empty"
-		if act != exp {
-			t.Errorf("Queue invalid peek error mismatch, actual: '%s', expected: '%s'",
-				act, exp)
-		}
 	}
+
 	q.Dispose()
 	q = nil
 }
