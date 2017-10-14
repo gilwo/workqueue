@@ -99,7 +99,7 @@ func (wp *WPool) poolUnlock(location string) {
 	wp.lock.Unlock()
 }
 
-func (wp *WPool) dispatcher() {
+func (wp *WPool) dispatcher2() {
 	//for wp.state
 	for {
 		switch wp.status {
@@ -112,6 +112,60 @@ func (wp *WPool) dispatcher() {
 			NotImplementedYet("dispatcher")
 		}
 	}
+}
+func (wp *WPool) dispatcher() {
+
+	dispatching := true
+	for dispatching {
+		wp.poolLock("dispatching loop select")
+
+		select {
+		case <-wp.workNeeded:
+			//fmt.Println(wp.q.Dump())
+			d, okd := wp.q.Peek()
+			if !okd {
+				// queue is empty
+				break
+			}
+			job, okj := d.(*WorkerJob)
+			if !okj {
+				panic(fmt.Sprintf("dequeued element is not a worker job: %T:%v\n", job, job))
+			}
+			worker := wp.wjPool.Get()
+			if worker == nil {
+				// pool get did not retrieve anything ...
+				//fmt.Println("pool get retrieved nothing")
+				break
+			} else {
+				fmt.Printf("%T:%v\n", worker, worker)
+			}
+			job.pworker = worker
+			wp.q.Dequeue()
+			wp.running += 1
+			job.status = Jready
+
+			go func() {
+				defer func() {
+					wp.poolLock("job invoker (dispatcher helper)")
+					defer wp.poolUnlock("job invoker (dispatcher helper)")
+
+					wp.wjPool.Put(job.pworker)
+					wp.running -= 1
+				}()
+				job.f(nil)
+			}()
+
+		case <-wp.shouldStop:
+			log.Info("stopping requested")
+			dispatching = false
+		case <-time.After(1 * time.Second):
+			log.Info("passed")
+			wp.updateWork()
+		}
+		wp.poolUnlock("dispatching loop select")
+	}
+	log.Info("notifying stopped")
+	wp.stopped <- struct{}{}
 }
 
 // get new pool of workers
@@ -215,60 +269,7 @@ func (wp *WPool) StartDispatcher() (ok bool, err error) {
 	err = nil
 	wp.status = Prunning
 
-	go func() {
-
-		dispatching := true
-		for dispatching {
-			wp.poolLock("dispatching loop select")
-
-			select {
-			case <-wp.workNeeded:
-				//fmt.Println(wp.q.Dump())
-				d, okd := wp.q.Peek()
-				if !okd {
-					// queue is empty
-					break
-				}
-				job, okj := d.(*WorkerJob)
-				if !okj {
-					panic(fmt.Sprintf("dequeued element is not a worker job: %T:%v\n", job, job))
-				}
-				worker := wp.wjPool.Get()
-				if worker == nil {
-					// pool get did not retrieve anything ...
-					//fmt.Println("pool get retrieved nothing")
-					break
-				} else {
-					fmt.Printf("%T:%v\n", worker, worker)
-				}
-				job.pworker = worker
-				wp.q.Dequeue()
-				wp.running += 1
-				job.status = Jready
-
-				go func() {
-					defer func() {
-						wp.poolLock("job invoker (dispatcher helper)")
-						defer wp.poolUnlock("job invoker (dispatcher helper)")
-
-						wp.wjPool.Put(job.pworker)
-						wp.running -= 1
-					}()
-					job.f(nil)
-				}()
-
-			case <-wp.shouldStop:
-				log.Info("stopping requested")
-				dispatching = false
-			case <-time.After(1 * time.Second):
-				log.Info("passed")
-				wp.updateWork()
-			}
-			wp.poolUnlock("dispatching loop select")
-		}
-		log.Info("notifying stopped")
-		wp.stopped <- struct{}{}
-	}()
+	go wp.dispatcher()
 	// TODO: finish ...
 
 	return
