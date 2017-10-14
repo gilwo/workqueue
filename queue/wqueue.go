@@ -12,15 +12,19 @@ type QNode struct {
 type Queue struct {
 	q        []*QNode
 	count    uint
-	capacity uint
+	capacity int
 	lock     *sync.Mutex
 }
 
-func NewQueue(capacity uint) (q *Queue, err error) {
+func NewQueue(capacity int) (q *Queue, err error) {
 	//TODO: add some chekcs ?
 	if capacity == 0 {
 		q = nil
 		err = fmt.Errorf("capacity is zero")
+		return
+	} else if capacity > 0 {
+		q = nil
+		err = fmt.Errorf("not supprting capacity > 0")
 		return
 	}
 

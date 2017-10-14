@@ -13,8 +13,16 @@ func TestNewQueue(t *testing.T) {
 				act, act)
 		}
 	}
+	if _, err := NewQueue(1); err != nil {
+		act := err.Error()
+		exp := "not supprting capacity > 0"
+		if act != exp {
+			t.Errorf("failed queue creation reason: expected : '%s', actual: '%s'",
+				act, act)
+		}
+	}
 
-	q, _ := NewQueue(2)
+	q, _ := NewQueue(-1)
 	if q == nil {
 		t.Errorf("failed to create new queue")
 	}
@@ -27,7 +35,7 @@ func TestNewQueue(t *testing.T) {
 }
 
 func TestPushAndPop(t *testing.T) {
-	q, _ := NewQueue(2)
+	q, _ := NewQueue(-1)
 
 	var data int32 = 1
 	q.Enqueue("a")
@@ -54,7 +62,7 @@ func TestPushAndPop(t *testing.T) {
 }
 
 func TestCount(t *testing.T) {
-	q, _ := NewQueue(2)
+	q, _ := NewQueue(-1)
 
 	if c := q.Count(); c != 0 {
 		t.Errorf("queue count, actual: %d, expected: 0", c)
@@ -78,7 +86,7 @@ func TestCount(t *testing.T) {
 }
 
 func TestPeek(t *testing.T) {
-	q, _ := NewQueue(2)
+	q, _ := NewQueue(-1)
 
 	if c := q.Count(); c != 0 {
 		t.Errorf("queue count, actual: %d, expected: 0", c)
@@ -102,7 +110,7 @@ func TestPeek(t *testing.T) {
 }
 
 func TestQueueClear(t *testing.T) {
-	q, _ := NewQueue(2)
+	q, _ := NewQueue(-1)
 
 	if c := q.Count(); c != 0 {
 		t.Errorf("queue count, actual: %d, expected: 0", c)
@@ -122,7 +130,7 @@ func TestQueueClear(t *testing.T) {
 }
 
 func TestQueueDump(t *testing.T) {
-	q, _ := NewQueue(2)
+	q, _ := NewQueue(-1)
 
 	if c := q.Count(); c != 0 {
 		t.Errorf("queue count, actual: %d, expected: 0", c)
