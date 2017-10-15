@@ -16,12 +16,10 @@ func NotImplementedYet(f string) {
 type PoolStatus int
 
 const (
-	Phalted PoolStatus = iota
-	Pready
+	Pready PoolStatus = iota
 	Prunning
 	Pstopping
 	Pstopped
-	Pquitting
 )
 
 type JobStatus int
@@ -44,8 +42,9 @@ func init() {
 	log.SetOutput(os.Stdout)
 
 	// Only log the warning severity or above.
-	//log.SetLevel(log.WarnLevel)
-	log.SetLevel(log.InfoLevel)
+	log.SetLevel(log.WarnLevel)
+	//log.SetLevel(log.InfoLevel)
+	//log.SetLevel(log.DebugLevel)
 }
 
 // TODO:
@@ -99,21 +98,10 @@ func (wp *WPool) poolUnlock(location string) {
 	wp.lock.Unlock()
 }
 
-func (wp *WPool) dispatcher2() {
-	//for wp.state
-	for {
-		switch wp.status {
-		case Pquitting:
-			wp.maintStopAllWorkers()
-			wp.maintFlushJobQueue()
-			// TODO : what else we need to do here ?
-			return
-		default:
-			NotImplementedYet("dispatcher")
-		}
-	}
-}
 func (wp *WPool) dispatcher() {
+	log.Debug("dispatcher started")
+
+	wp.status = Prunning
 
 	dispatching := true
 	for dispatching {
@@ -135,10 +123,17 @@ func (wp *WPool) dispatcher() {
 			if worker == nil {
 				// pool get did not retrieve anything ...
 				//fmt.Println("pool get retrieved nothing")
+				log.Warn("pool get did not retrieve pool element")
 				break
 			} else {
-				fmt.Printf("%T:%v\n", worker, worker)
+				//fmt.Printf("%T:%v\n", worker, worker)
+				log.WithFields(log.Fields{
+					"element type":  fmt.Sprintf("%T", worker),
+					"element value": fmt.Sprintf("%v", worker),
+				},
+				).Debug("pool get retrieved element")
 			}
+
 			job.pworker = worker
 			wp.q.Dequeue()
 			wp.running += 1
@@ -158,8 +153,16 @@ func (wp *WPool) dispatcher() {
 		case <-wp.shouldStop:
 			log.Info("stopping requested")
 			dispatching = false
-		case <-time.After(1 * time.Second):
+			wp.maintStopAllWorkers()
+			wp.maintFlushJobQueue()
+			// TODO : what else we need to do here ?
+
+		//case <-time.After(1 * time.Second):
+		default:
 			log.Info("passed")
+			wp.poolUnlock("dispatching idle sleep")
+			time.Sleep(time.Second)
+			wp.poolLock("dispatching idle sleep")
 			wp.updateWork()
 		}
 		wp.poolUnlock("dispatching loop select")
@@ -169,38 +172,16 @@ func (wp *WPool) dispatcher() {
 }
 
 // get new pool of workers
-func NewWPool(count uint) (wp *WPool, err error) {
-	log.WithFields(log.Fields{"count": count}).Debug("abcd")
+func NewWPool(workersCount uint) (wp *WPool, err error) {
+	log.WithFields(log.Fields{"worker count": workersCount}).Debug("new pool requested")
 	err = nil
 
-	//wp = &WPool{
-	//	maxWorkers: count,
-	//	status: Phalted,
-	//	shouldStop: make(chan struct{}),
-	//	workerFinished: make(chan struct{}, count),
-	//	wjPool: sync.Pool{
-	//		New: func () interface{}{
-	//			return new(poolWorker)
-	//		},
-	//	},
-	//}
-
 	wp = &WPool{}
-	wp.maxWorkers = count
-	wp.status = Phalted
+	wp.maxWorkers = workersCount
 	wp.shouldStop = make(chan struct{})
 	wp.stopped = make(chan struct{})
 	wp.workNeeded = make(chan struct{}, wp.maxWorkers)
 
-	//newWorkerPoolFuncHelper := func() func() interface{} {
-	//	newWorkerPoolFunc := func() interface{} {
-	//		if wp.created > wp.maxWorkers {
-	//			return nil
-	//		}
-	//		return new(poolWorker)
-	//	}
-	//	return newWorkerPoolFunc
-	//}
 	wp.wjPool = sync.Pool{
 		New: func() interface{} {
 			wp.workerCreated += 1
@@ -212,9 +193,13 @@ func NewWPool(count uint) (wp *WPool, err error) {
 		},
 	}
 	wp.lock = &sync.Mutex{}
-	wp.q, err = workerqueue.NewQueue(10) // TODO : change this 10 ...
+	wp.q, err = workerqueue.NewQueue(-1)
 	if err == nil {
 		wp.status = Pready
+	} else {
+		log.WithFields(log.Fields{"queue error": err}).Error("failed to allocate queue for pool")
+		err = fmt.Errorf("failed to allocate pool")
+		wp = nil
 	}
 
 	return
@@ -250,6 +235,11 @@ func (wp *WPool) PoolStatus() (status PoolStatus) {
 
 func (wp *WPool) updateWork() {
 	if wp.waiting > 0 && wp.running < wp.maxWorkers {
+		log.WithFields(log.Fields{
+			"waiting":     wp.waiting,
+			"running":     wp.running,
+			"max workers": wp.maxWorkers,
+		}).Debug("work is needed")
 		wp.workNeeded <- struct{}{}
 	}
 }
