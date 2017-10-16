@@ -210,7 +210,7 @@ func (wp *WPool) Dispose() (ok bool, err error) {
 	wp.poolLock("dispose")
 	defer wp.poolUnlock("dispose")
 
-	if wp.status != Pstopped {
+	if wp.status != Pstopped && wp.status != Pready {
 		ok = false
 		err = fmt.Errorf("WorkerPool cannot be disposed at the momement (%d), not stopped", wp.status)
 		return
