@@ -45,6 +45,16 @@ func stopCheckDispatcher(t *testing.T, wp *WPool, f func()) {
 	}
 }
 
+func createJobFunc(msg string) (f func(interface{}) interface{}, ch chan (struct{})) {
+	ch = make(chan (struct{}))
+	f = func(i interface{}) interface{} {
+		fmt.Printf(msg)
+		ch <- struct{}{}
+		return nil
+	}
+	return
+}
+
 func TestNewPool(t *testing.T) {
 
 	wp := startCheckPool(t, 10)
@@ -67,7 +77,7 @@ func TestNewPool(t *testing.T) {
 	var hello bool
 
 	f := func(i interface{}) interface{} {
-		fmt.Printf("hello world\n")
+		fmt.Printf("hello " + t.Name() + "\n")
 		hello = true
 		timerStopDispatcher.Stop()
 		go foo()
@@ -106,7 +116,7 @@ func TestJobFailToFinishInTime(t *testing.T) {
 	var hello bool
 
 	f := func(i interface{}) interface{} {
-		fmt.Printf("hello world\n")
+		fmt.Printf("hello " + t.Name() + "\n")
 		time.Sleep(2 * time.Second)
 		hello = true
 		return true
@@ -159,7 +169,7 @@ func TestMultipleJobsQueue(t *testing.T) {
 	chello := sync.NewCond(&sync.Mutex{})
 
 	for i := 0; i < 10; i++ {
-		msg := fmt.Sprintf("hello world %d", i+1)
+		msg := fmt.Sprintf("hello "+t.Name()+" %d", i+1)
 		y := i
 		fmt.Printf("### queueing job %d\n", i+1)
 		checkJobQueue(t, wp, func(j interface{}) interface{} {
