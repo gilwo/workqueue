@@ -228,3 +228,22 @@ func TestMultipleJobsQueue(t *testing.T) {
 
 	checkPoolDispose(t, wp)
 }
+
+func TestWPool_Dispose(t *testing.T) {
+	wp := startCheckPool(t, 10)
+
+	wp.status = Prunning
+
+	_, err := wp.Dispose()
+	if err == nil {
+		t.Errorf("dispose should fail when status is running")
+	} else {
+		exp := fmt.Sprintf("WorkerPool cannot be disposed at the momement (%d), not stopped", Prunning)
+		if exp != err.Error() {
+			t.Errorf("failed pool dispose mismatch exp: %v, act: %v", exp, err.Error())
+		}
+	}
+
+	wp.status = Pready
+	checkPoolDispose(t, wp)
+}
