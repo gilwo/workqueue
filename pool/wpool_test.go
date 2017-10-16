@@ -257,3 +257,74 @@ func TestWPool_Dispose(t *testing.T) {
 	wp.status = Pready
 	checkPoolDispose(t, wp)
 }
+
+func TestWPoolDispatcher(t *testing.T) {
+
+	var jobFuncCalled bool
+	dispatcherStopCh := make(chan (struct{}))
+	wp := startCheckPool(t, 10)
+
+	wp.wjPool = sync.Pool{}
+
+	startCheckDispatcher(t, wp)
+
+	f, ch := createJobFunc("hello " + t.Name() + "\n")
+
+	go func() {
+		select {
+		case <-ch:
+			jobFuncCalled = true
+		}
+	}()
+
+	checkJobQueue(t, wp, f)
+
+	time.Sleep(1 * time.Second)
+
+	stopCheckDispatcher(t, wp, func() { close(dispatcherStopCh) })
+
+	select {
+	case <-dispatcherStopCh:
+		if jobFuncCalled {
+			t.Errorf("job was not suppose to be called")
+		}
+		break
+	case <-time.After(3 * time.Second):
+		t.Errorf("pool dispathcer did not stopped after reasonable time")
+	}
+	checkPoolDispose(t, wp)
+}
+
+func TestWPoolDispatcher2(t *testing.T) {
+
+	wp := startCheckPool(t, 10)
+	var jobFuncCalled bool
+	dispatcherStopCh := make(chan (struct{}))
+
+	f, ch := createJobFunc("hello " + t.Name() + "\n")
+
+	go func() {
+		select {
+		case <-ch:
+			jobFuncCalled = true
+		}
+	}()
+
+	checkJobQueue(t, wp, f)
+	wp.q.Dequeue()
+	wp.q.Enqueue(1)
+	startCheckDispatcher(t, wp)
+	time.Sleep(2 * time.Second)
+
+	stopCheckDispatcher(t, wp, func() { close(dispatcherStopCh) })
+	select {
+	case <-dispatcherStopCh:
+		if jobFuncCalled {
+			t.Errorf("job was not suppose to be called")
+		}
+		break
+	case <-time.After(3 * time.Second):
+		t.Errorf("pool dispathcer did not stopped after reasonable time")
+	}
+	checkPoolDispose(t, wp)
+}
