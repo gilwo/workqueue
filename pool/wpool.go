@@ -117,16 +117,21 @@ func (wp *WPool) dispatcher() {
 			}
 			job, okj := d.(*WorkerJob)
 			if !okj {
-				panic(fmt.Sprintf("dequeued element is not a worker job: %T:%v\n", job, job))
+				log.WithFields(log.Fields{
+					"element type":  fmt.Sprintf("%T", d),
+					"element value": fmt.Sprintf("%v", d),
+				},
+				).Warn("queued element is not a *WorkerJob")
+				wp.q.Dequeue()
+				wp.waiting -= 1
+				break
 			}
 			worker := wp.wjPool.Get()
 			if worker == nil {
 				// pool get did not retrieve anything ...
-				//fmt.Println("pool get retrieved nothing")
 				log.Warn("pool get did not retrieve pool element")
 				break
 			} else {
-				//fmt.Printf("%T:%v\n", worker, worker)
 				log.WithFields(log.Fields{
 					"element type":  fmt.Sprintf("%T", worker),
 					"element value": fmt.Sprintf("%v", worker),
@@ -249,7 +254,7 @@ func (wp *WPool) StartDispatcher() (ok bool, err error) {
 	wp.poolLock("StartDispatcher")
 	defer wp.poolUnlock("StartDispatcher")
 
-	if wp.q == nil || wp.status != Pready {
+	if wp.q == nil || (wp.status != Pready && wp.status != Pstopped) {
 		ok = false
 		err = fmt.Errorf("pool dispatcher unstartable")
 		return
