@@ -339,3 +339,41 @@ func TestWPoolDispatcher2(t *testing.T) {
 	}
 	checkPoolDispose(t, wp)
 }
+
+func BenchmarkWPool_JobQueue(b *testing.B) {
+
+	dispatcherStopCh := make(chan (struct{}))
+	jobFinished := make(chan (struct{}), 100)
+	wp := startCheckPool(b, 10)
+	startCheckDispatcher(b, wp)
+
+	f := func(i interface{}) interface{} {
+		foo := true
+		jobFinished <- struct{}{}
+		return foo
+	}
+
+	//go func(){
+	//b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		checkJobQueue(b, wp, f)
+	}
+	//}()
+
+	var count int
+	for i := 0; i < b.N; i++ {
+		<-jobFinished
+		count += 1
+	}
+	fmt.Printf("%d jobs run\n", count)
+
+	stopCheckDispatcher(b, wp, func() { close(dispatcherStopCh) })
+	select {
+	case <-dispatcherStopCh:
+		break
+	case <-time.After(3 * time.Second):
+		torbErrorfMsg(b, "pool dispathcer did not stopped after reasonable time")
+	}
+
+	checkPoolDispose(b, wp)
+}
