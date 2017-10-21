@@ -7,41 +7,52 @@ import (
 	"time"
 )
 
-func startCheckPool(t *testing.T, count uint) *WPool {
+func torbErrorfMsg(tb interface{}, msg string) {
+	t, tok := tb.(*testing.T)
+	b, _ := tb.(*testing.B)
+
+	if tok {
+		t.Errorf(msg)
+	} else {
+		b.Errorf(msg)
+	}
+}
+
+func startCheckPool(tb interface{}, count uint) *WPool {
 	wp, err := NewWPool(count)
 	if err != nil {
-		t.Errorf("failed to create pool")
+		torbErrorfMsg(tb, "failed to create pool")
 	}
 	return wp
 }
 
-func startCheckDispatcher(t *testing.T, wp *WPool) {
+func startCheckDispatcher(tb interface{}, wp *WPool) {
 	_, err := wp.StartDispatcher()
 	if err != nil {
-		t.Errorf("dispatcher failed to start: %v", err)
+		torbErrorfMsg(tb, fmt.Sprintf("dispatcher failed to start: %v", err))
 	}
 }
 
-func checkJobQueue(t *testing.T, wp *WPool, f JobFunc) {
+func checkJobQueue(tb interface{}, wp *WPool, f JobFunc) {
 	_, err := wp.JobQueue(f)
 
 	if err != nil {
-		t.Errorf("job queue failed, err: %v", err)
+		torbErrorfMsg(tb, fmt.Sprintf("job queue failed, err: %v", err))
 	} else {
 	}
 }
 
-func checkPoolDispose(t *testing.T, wp *WPool) {
+func checkPoolDispose(tb interface{}, wp *WPool) {
 	_, err := wp.Dispose()
 	if err != nil {
-		t.Errorf("pool failed on dispose, err: %v\n", err)
+		torbErrorfMsg(tb, fmt.Sprintf("pool failed on dispose, err: %v\n", err))
 	}
 }
 
-func stopCheckDispatcher(t *testing.T, wp *WPool, f func()) {
+func stopCheckDispatcher(tb interface{}, wp *WPool, f func()) {
 	_, err := wp.StopDispatcher(f)
 	if err != nil {
-		t.Errorf("pool failed to stop, err: %v\n", err)
+		torbErrorfMsg(tb, fmt.Sprintf("pool failed to stop, err: %v\n", err))
 	}
 }
 
