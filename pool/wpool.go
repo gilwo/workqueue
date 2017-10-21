@@ -57,6 +57,7 @@ type poolWorker interface{}
 
 type WorkerJob struct {
 	f       JobFunc
+	arg     interface{}
 	status  JobStatus
 	pworker poolWorker
 }
@@ -152,7 +153,7 @@ func (wp *WPool) dispatcher() {
 					wp.wjPool.Put(job.pworker)
 					wp.running -= 1
 				}()
-				job.f(nil)
+				job.f(job.arg)
 			}()
 
 		case <-wp.shouldStop:
@@ -308,7 +309,7 @@ func (wp *WPool) StopDispatcher(stoppedFnCb func()) (ok bool, err error) {
 }
 
 // queue new job func to the worker pool
-func (wp *WPool) JobQueue(jobfunc JobFunc) (job *WorkerJob, err error) {
+func (wp *WPool) JobQueue(jobfunc JobFunc, jobArg interface{}) (job *WorkerJob, err error) {
 	wp.poolLock("JobQueue")
 	defer wp.poolUnlock("JobQueue")
 
@@ -320,6 +321,7 @@ func (wp *WPool) JobQueue(jobfunc JobFunc) (job *WorkerJob, err error) {
 	err = nil
 	job = &WorkerJob{
 		jobfunc,
+		jobArg,
 		Jready,
 		nil,
 	}

@@ -33,8 +33,8 @@ func startCheckDispatcher(tb interface{}, wp *WPool) {
 	}
 }
 
-func checkJobQueue(tb interface{}, wp *WPool, f JobFunc) {
-	_, err := wp.JobQueue(f)
+func checkJobQueue(tb interface{}, wp *WPool, f JobFunc, arg interface{}) {
+	_, err := wp.JobQueue(f, arg)
 
 	if err != nil {
 		torbErrorfMsg(tb, fmt.Sprintf("job queue failed, err: %v", err))
@@ -95,7 +95,7 @@ func TestNewPool(t *testing.T) {
 		return nil
 	}
 
-	checkJobQueue(t, wp, f)
+	checkJobQueue(t, wp, f, "")
 
 	go func() {
 		select {
@@ -133,7 +133,7 @@ func TestJobFailToFinishInTime(t *testing.T) {
 		return true
 	}
 
-	checkJobQueue(t, wp, f)
+	checkJobQueue(t, wp, f, "")
 
 	c := sync.NewCond(&sync.Mutex{})
 
@@ -192,7 +192,7 @@ func TestMultipleJobsQueue(t *testing.T) {
 			hello[y] = true
 			//}
 			return nil
-		})
+		}, "")
 	}
 
 	startCheckDispatcher(t, wp)
@@ -288,7 +288,7 @@ func TestWPoolDispatcher(t *testing.T) {
 		}
 	}()
 
-	checkJobQueue(t, wp, f)
+	checkJobQueue(t, wp, f, "")
 
 	time.Sleep(1 * time.Second)
 
@@ -321,7 +321,7 @@ func TestWPoolDispatcher2(t *testing.T) {
 		}
 	}()
 
-	checkJobQueue(t, wp, f)
+	checkJobQueue(t, wp, f, "")
 	wp.q.Dequeue()
 	wp.q.Enqueue(1)
 	startCheckDispatcher(t, wp)
@@ -356,7 +356,7 @@ func BenchmarkWPool_JobQueue(b *testing.B) {
 	//go func(){
 	//b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		checkJobQueue(b, wp, f)
+		checkJobQueue(b, wp, f, "")
 	}
 	//}()
 
