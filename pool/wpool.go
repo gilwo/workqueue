@@ -32,6 +32,14 @@ const (
 	Jinvalid
 )
 
+var workerpoolLogLevel log.Level = log.ErrorLevel
+
+func WorkerPoolSetLogLevel(level log.Level) {
+	workerpoolLogLevel = level
+
+	log.SetLevel(workerpoolLogLevel)
+}
+
 func init() {
 	// Log as JSON instead of the default ASCII formatter.
 	//log.SetFormatter(&log.JSONFormatter{})
@@ -42,9 +50,7 @@ func init() {
 	log.SetOutput(os.Stdout)
 
 	// Only log the warning severity or above.
-	log.SetLevel(log.WarnLevel)
-	//log.SetLevel(log.InfoLevel)
-	//log.SetLevel(log.DebugLevel)
+	log.SetLevel(workerpoolLogLevel)
 }
 
 // TODO:
