@@ -55,21 +55,23 @@ func init() {
 
 // TODO:
 // type for check function for job function to see if it needs to stop executing
+type checkStop func() bool
 
 // type for job function to queue
-type JobFunc func(interface{}) interface{}
+type JobFunc func(interface{}, checkStop) interface{}
 
 type poolWorker interface{}
 
 type WorkerJob struct {
-	f       JobFunc
-	arg     interface{}
-	status  JobStatus
-	pworker poolWorker
-}
-
-func (wj *WorkerJob) StopJob() {
-
+	f          JobFunc
+	fArg       interface{}
+	fRet       interface{}
+	lock       sync.RWMutex
+	status     JobStatus
+	pworker    poolWorker
+	shouldStop bool
+	stopChan   chan (struct{})
+	pool       *WPool
 }
 
 type WPool struct {
@@ -84,6 +86,7 @@ type WPool struct {
 	wjPool        sync.Pool
 	lock          *sync.Mutex
 	workNeeded    chan struct{}
+	workers       map[poolWorker]*WorkerJob
 }
 
 func (wp *WPool) maintStopAllWorkers() {
@@ -150,16 +153,29 @@ func (wp *WPool) dispatcher() {
 			wp.q.Dequeue()
 			wp.running += 1
 			job.status = Jready
+			wp.workers[job.pworker] = job
 
 			go func() {
 				defer func() {
 					wp.poolLock("job invoker (dispatcher helper)")
 					defer wp.poolUnlock("job invoker (dispatcher helper)")
 
+					wp.workers[job.pworker] = nil
 					wp.wjPool.Put(job.pworker)
 					wp.running -= 1
 				}()
-				job.f(job.arg)
+				job.status = Jrunning
+				fRet := job.f(job.fArg, func() (shouldStop bool) {
+					job.jobRLock("job should stop checker")
+					defer job.jobRUnlock("job should stop checker")
+					shouldStop = job.shouldStop
+					return
+				})
+				job.jobWLock("job worker finishing")
+				job.fRet = fRet
+				job.status = Jfinished
+				close(job.stopChan)
+				job.jobWUnlock("job worker finishing")
 			}()
 
 		case <-wp.shouldStop:
@@ -193,6 +209,7 @@ func NewWPool(workersCount uint) (wp *WPool, err error) {
 	wp.shouldStop = make(chan struct{})
 	wp.stopped = make(chan struct{})
 	wp.workNeeded = make(chan struct{}, wp.maxWorkers)
+	wp.workers = make(map[poolWorker]*WorkerJob)
 
 	wp.wjPool = sync.Pool{
 		New: func() interface{} {
@@ -315,29 +332,87 @@ func (wp *WPool) StopDispatcher(stoppedFnCb func()) (ok bool, err error) {
 }
 
 // queue new job func to the worker pool
-func (wp *WPool) JobQueue(jobfunc JobFunc, jobArg interface{}) (job *WorkerJob, err error) {
+func (wp *WPool) NewJobQueue(jobfunc JobFunc, jobArg interface{}) (job *WorkerJob, err error) {
 	wp.poolLock("JobQueue")
 	defer wp.poolUnlock("JobQueue")
 
 	if wp.q == nil {
 		err = fmt.Errorf("job cannot be queued")
-		job = nil
 		return
 	}
-	err = nil
-	job = &WorkerJob{
-		jobfunc,
-		jobArg,
-		Jready,
-		nil,
-	}
+	job = NewJobWorker(jobfunc, jobArg)
+	job.status = Jready
+	job.pool = wp
 	wp.q.Enqueue(job)
+
 	wp.waiting += 1
 	wp.updateWork()
 	return
 }
 
-func (wp *WPool) JobStatus(jobid int) (status JobStatus) {
+// queue worker job to the worker pool
+func (wp *WPool) JobQueue(job *WorkerJob) (err error) {
+	wp.poolLock("JobQueue")
+	defer wp.poolUnlock("JobQueue")
+
+	if wp.q == nil || job == nil || job.status == Jinvalid || job.pool != nil {
+		log.WithFields(log.Fields{
+			"pool": wp,
+			"job": job,
+		}).Warn("job cannot be queued")
+		err = fmt.Errorf("job cannot be queued")
+		return
+	}
+
+	job.pool = wp
+	job.status = Jready
+	wp.q.Enqueue(job)
+
+	wp.waiting += 1
+	wp.updateWork()
+	return
+}
+
+func NewJobWorker(jobfunc JobFunc, jobArg interface{}) (job *WorkerJob) {
+	job = &WorkerJob{
+		jobfunc,
+		jobArg,
+		nil,
+		sync.RWMutex{},
+		Junassigned,
+		nil,
+		false,
+		make(chan (struct{})),
+		nil,
+	}
+	return
+}
+
+func (job *WorkerJob) jobRLock(location string) {
+	job.lock.RLock()
+	log.WithFields(log.Fields{"enter": location}).Debug("Rlock acquired")
+}
+
+func (job *WorkerJob) jobRUnlock(location string) {
+	log.WithFields(log.Fields{"leave": location}).Debug("Rlock released")
+	job.lock.RUnlock()
+}
+
+func (job *WorkerJob) jobWLock(location string) {
+	job.lock.Lock()
+	log.WithFields(log.Fields{"enter": location}).Debug("Wlock acquired")
+}
+
+func (job *WorkerJob) jobWUnlock(location string) {
+	log.WithFields(log.Fields{"leave": location}).Debug("Wlock released")
+	job.lock.Unlock()
+}
+
+func (job *WorkerJob) JobRemove() (ok bool) {
+	NotImplementedYet("JobRemove")
+	return false
+}
+
 
 	return Jready
 }

@@ -34,7 +34,7 @@ func startCheckDispatcher(tb interface{}, wp *WPool) {
 }
 
 func checkJobQueue(tb interface{}, wp *WPool, f JobFunc, arg interface{}) {
-	_, err := wp.JobQueue(f, arg)
+	_, err := wp.NewJobQueue(f, arg)
 
 	if err != nil {
 		torbErrorfMsg(tb, fmt.Sprintf("job queue failed, err: %v", err))
@@ -56,9 +56,9 @@ func stopCheckDispatcher(tb interface{}, wp *WPool, f func()) {
 	}
 }
 
-func createJobFunc(msg string) (f func(interface{}) interface{}, ch chan (struct{})) {
+func createJobFunc(msg string) (f func(interface{}, checkStop) interface{}, ch chan (struct{})) {
 	ch = make(chan (struct{}))
-	f = func(i interface{}) interface{} {
+	f = func(i interface{}, shouldStop checkStop) interface{} {
 		fmt.Printf(msg)
 		ch <- struct{}{}
 		return nil
@@ -87,7 +87,7 @@ func TestNewPool(t *testing.T) {
 
 	var hello bool
 
-	f := func(i interface{}) interface{} {
+	f := func(i interface{}, shouldStop checkStop) interface{} {
 		fmt.Printf("hello " + t.Name() + "\n")
 		hello = true
 		timerStopDispatcher.Stop()
@@ -126,7 +126,7 @@ func TestJobFailToFinishInTime(t *testing.T) {
 
 	var hello bool
 
-	f := func(i interface{}) interface{} {
+	f := func(i interface{}, shouldStop checkStop) interface{} {
 		fmt.Printf("hello " + t.Name() + "\n")
 		time.Sleep(2 * time.Second)
 		hello = true
@@ -183,14 +183,12 @@ func TestMultipleJobsQueue(t *testing.T) {
 		msg := fmt.Sprintf("hello "+t.Name()+" %d", i+1)
 		y := i
 		fmt.Printf("### queueing job %d\n", i+1)
-		checkJobQueue(t, wp, func(j interface{}) interface{} {
+		checkJobQueue(t, wp, func(j interface{}, shouldStop checkStop) interface{} {
 			chello.L.Lock()
 			chello.Wait()
 			chello.L.Unlock()
 			fmt.Println(msg)
-			//if y != 0 {
 			hello[y] = true
-			//}
 			return nil
 		}, "")
 	}
@@ -347,18 +345,15 @@ func BenchmarkWPool_JobQueue(b *testing.B) {
 	wp := startCheckPool(b, 10)
 	startCheckDispatcher(b, wp)
 
-	f := func(i interface{}) interface{} {
+	f := func(i interface{}, shouldStop checkStop) interface{} {
 		foo := true
 		jobFinished <- struct{}{}
 		return foo
 	}
 
-	//go func(){
-	//b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		checkJobQueue(b, wp, f, "")
 	}
-	//}()
 
 	var count int
 	for i := 0; i < b.N; i++ {
