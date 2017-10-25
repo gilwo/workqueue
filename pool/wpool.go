@@ -54,7 +54,6 @@ func init() {
 	log.SetLevel(workerpoolLogLevel)
 }
 
-// TODO:
 // type for check function for job function to see if it needs to stop executing
 type checkStop func() bool
 
@@ -111,8 +110,6 @@ func (wp *WPool) poolUnlock(location string) {
 
 func (wp *WPool) dispatcher() {
 	log.Debug("dispatcher started")
-
-	wp.status = Prunning
 
 	dispatching := true
 	for dispatching {
@@ -186,7 +183,6 @@ func (wp *WPool) dispatcher() {
 			wp.maintFlushJobQueue()
 			// TODO : what else we need to do here ?
 
-		//case <-time.After(1 * time.Second):
 		default:
 			log.Info("passed")
 			wp.poolUnlock("dispatching idle sleep")
@@ -203,7 +199,6 @@ func (wp *WPool) dispatcher() {
 // get new pool of workers
 func NewWPool(workersCount uint) (wp *WPool, err error) {
 	log.WithFields(log.Fields{"worker count": workersCount}).Debug("new pool requested")
-	err = nil
 
 	wp = &WPool{}
 	wp.maxWorkers = workersCount
@@ -241,13 +236,11 @@ func (wp *WPool) Dispose() (ok bool, err error) {
 	defer wp.poolUnlock("dispose")
 
 	if wp.status != Pstopped && wp.status != Pready {
-		ok = false
 		err = fmt.Errorf("WorkerPool cannot be disposed at the momement (%d), not stopped", wp.status)
 		return
 	}
 
 	ok = true
-	err = nil
 
 	wp.q.Dispose()
 	wp.q = nil
@@ -266,6 +259,7 @@ func (wp *WPool) PoolStatus() (status PoolStatus) {
 func (wp *WPool) updateWork() {
 	if wp.waiting > 0 && wp.running < wp.maxWorkers {
 		log.WithFields(log.Fields{
+			"status":     wp.status,
 			"waiting":     wp.waiting,
 			"running":     wp.running,
 			"max workers": wp.maxWorkers,
@@ -280,17 +274,12 @@ func (wp *WPool) StartDispatcher() (ok bool, err error) {
 	defer wp.poolUnlock("StartDispatcher")
 
 	if wp.q == nil || (wp.status != Pready && wp.status != Pstopped) {
-		ok = false
 		err = fmt.Errorf("pool dispatcher unstartable")
 		return
 	}
-
 	ok = true
-	err = nil
 	wp.status = Prunning
-
 	go wp.dispatcher()
-	// TODO: finish ...
 
 	return
 }
@@ -301,19 +290,16 @@ func (wp *WPool) StopDispatcher(stoppedFnCb func()) (ok bool, err error) {
 	defer wp.poolUnlock("StopDispatcher")
 
 	if wp.status == Pstopping {
-		ok = false
 		err = fmt.Errorf("pool already being stopped")
 		return
 
 	} else if wp.q == nil || wp.status != Prunning {
-		ok = false
 		err = fmt.Errorf("pool dispatcher is unstopable")
 		return
 	}
 	wp.status = Pstopping
 
 	ok = true
-	err = nil
 
 	go func() {
 		//wp.poolLock("StopDispatcher helper")
