@@ -25,9 +25,10 @@ const (
 type JobStatus int
 
 const (
-	Jready JobStatus = iota
+	Junassigned JobStatus = iota
+	Jready
 	Jrunning
-	Jcancelled
+	Jstopping
 	Jfinished
 	Jinvalid
 )
@@ -413,6 +414,61 @@ func (job *WorkerJob) JobRemove() (ok bool) {
 	return false
 }
 
+// disposing a WorkerJob, not usable after call
+// this function acquire lock
+func (job *WorkerJob) JobDispose() (err error) {
+	job.jobWLock("JobDispose")
+	defer func () {
+		if err == nil {
+			job.status = Jinvalid
+			job.jobWUnlock("JobDispose")
+		}
+	}()
 
-	return Jready
+	if job.pool != nil && job.status != Junassigned {
+		log.WithFields(log.Fields{
+			"job status": job.status,
+			"job": job,
+		}).Warn("job cannot be disposed now")
+		err = fmt.Errorf("unable to dispose job")
+	}
+	return
+}
+
+// retrieve WorkerJob status
+// this function acquire lock
+func (job *WorkerJob) JobStatus() (status JobStatus) {
+	job.jobRLock("JobStatus")
+	defer job.jobRUnlock("JobStatus")
+	status = job.status
+	return
+}
+
+// retrieve WorkerJob func return value
+// this function acquire lock
+func (job *WorkerJob) JobRetVal() (retVal interface{}) {
+	job.jobRLock("JobRetVal")
+	defer job.jobRUnlock("JobRetVal")
+	if job.status != Jfinished {
+		return
+	}
+	retVal = job.fRet
+	return
+}
+
+// stop WorkerJob execution
+// this function acquire lock
+func (job *WorkerJob) JobStop(notifyStopped func(*WorkerJob)) (ok bool) {
+	job.jobWLock("JobStop")
+	defer job.jobWUnlock("JobStop")
+	if job.status != Jrunning {
+		return
+	}
+	job.status = Jstopping
+	job.shouldStop = true
+	ok = true
+	if notifyStopped != nil {
+		go notifyStopped(job)
+	}
+	return
 }
