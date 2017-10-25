@@ -90,11 +90,21 @@ type WPool struct {
 }
 
 func (wp *WPool) maintStopAllWorkers() {
-	NotImplementedYet("maintStopAllWorkers")
+	log.WithFields(log.Fields{"current workers count": wp.workerCreated}).Debug("stopping all workers")
+	for _, v := range wp.workers {
+		if v != nil {
+			v.JobStop(nil)
+		}
+	}
 }
 
 func (wp *WPool) maintFlushJobQueue() {
-	NotImplementedYet("maintFlushJobQueue")
+	log.WithFields(log.Fields{"current workers count": wp.workerCreated}).Debug("flushing all workers")
+	for k, v := range wp.workers {
+		if v != nil {
+			wp.workers[k] = nil
+		}
+	}
 }
 
 func (wp *WPool) poolLock(location string) {
