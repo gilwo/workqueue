@@ -109,12 +109,12 @@ func (wp *WPool) maintFlushJobQueue() {
 
 func (wp *WPool) poolLock(location string) {
 	wp.lock.Lock()
-	log.WithFields(log.Fields{"enter": location}).Debug("lock acquired")
+	log.WithFields(log.Fields{"enter": location, "pool": wp}).Debug("Pool Lock acquired")
 
 }
 
 func (wp *WPool) poolUnlock(location string) {
-	log.WithFields(log.Fields{"leave": location}).Debug("lock released")
+	log.WithFields(log.Fields{"leave": location, "pool": wp}).Debug("Pool Lock released")
 	wp.lock.Unlock()
 }
 
@@ -387,21 +387,21 @@ func NewJobWorker(jobfunc JobFunc, jobArg interface{}) (job *WorkerJob) {
 
 func (job *WorkerJob) jobRLock(location string) {
 	job.lock.RLock()
-	log.WithFields(log.Fields{"enter": location}).Debug("Rlock acquired")
+	log.WithFields(log.Fields{"enter": location, "job": job}).Debug("Job Rlock acquired")
 }
 
 func (job *WorkerJob) jobRUnlock(location string) {
-	log.WithFields(log.Fields{"leave": location}).Debug("Rlock released")
+	log.WithFields(log.Fields{"leave": location, "job": job}).Debug("Job Rlock released")
 	job.lock.RUnlock()
 }
 
 func (job *WorkerJob) jobWLock(location string) {
 	job.lock.Lock()
-	log.WithFields(log.Fields{"enter": location}).Debug("Wlock acquired")
+	log.WithFields(log.Fields{"enter": location, "job": job}).Debug("Job Wlock acquired")
 }
 
 func (job *WorkerJob) jobWUnlock(location string) {
-	log.WithFields(log.Fields{"leave": location}).Debug("Wlock released")
+	log.WithFields(log.Fields{"leave": location, "job": job}).Debug("Job Wlock released")
 	job.lock.Unlock()
 }
 

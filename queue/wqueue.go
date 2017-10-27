@@ -24,7 +24,7 @@ func NewQueue(capacity int) (q *Queue, err error) {
 		return
 	} else if capacity > 0 {
 		q = nil
-		err = fmt.Errorf("not supprting capacity > 0")
+		err = fmt.Errorf("not supporting capacity > 0")
 		return
 	}
 
