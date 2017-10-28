@@ -74,6 +74,12 @@ type WorkerJob struct {
 	pool       *WPool
 }
 
+func (w WorkerJob) String() string {
+	return fmt.Sprintf(
+		"Job [%p], func [%p], arg [%v], ret [%v], status [%v], worker [%p], pool [%p], shouldStop [%v]",
+			&w, w.f, w.fArg, w.fRet, w.status, w.pworker, w.pool, w.shouldStop)
+}
+
 type WPool struct {
 	maxWorkers    uint
 	status        PoolStatus

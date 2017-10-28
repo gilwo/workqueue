@@ -16,6 +16,11 @@ type Queue struct {
 	lock     *sync.Mutex
 }
 
+func (q Queue) String () string {
+	return fmt.Sprintf("Q [%p], count [%d], capacity [%d], elements [%v]",
+		&q, q.count, q.capacity, q.q)
+}
+
 func NewQueue(capacity int) (q *Queue, err error) {
 	//TODO: add some chekcs ?
 	if capacity == 0 {
