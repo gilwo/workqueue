@@ -55,10 +55,10 @@ func init() {
 }
 
 // type for check function for job function to see if it needs to stop executing
-type checkStop func() bool
+type CheckStop func() bool
 
 // type for job function to queue
-type JobFunc func(interface{}, checkStop) interface{}
+type JobFunc func(interface{}, CheckStop) interface{}
 
 type poolWorker interface{}
 
