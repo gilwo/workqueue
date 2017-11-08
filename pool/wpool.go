@@ -91,7 +91,7 @@ type WPool struct {
 	stopped       chan struct{}
 	wjPool        sync.Pool
 	lock          *sync.Mutex
-	workNeeded    chan struct{}
+	workNeeded2   bool
 	workers       map[poolWorker]*WorkerJob
 }
 
@@ -132,65 +132,6 @@ func (wp *WPool) dispatcher() {
 		wp.poolLock("dispatching loop select")
 
 		select {
-		case <-wp.workNeeded:
-			//fmt.Println(wp.q.Dump())
-			d, okd := wp.q.Peek()
-			if !okd {
-				// queue is empty
-				break
-			}
-			job, okj := d.(*WorkerJob)
-			if !okj {
-				log.WithFields(log.Fields{
-					"element type":  fmt.Sprintf("%T", d),
-					"element value": fmt.Sprintf("%v", d),
-				},
-				).Warn("queued element is not a *WorkerJob")
-				wp.q.Dequeue()
-				wp.waiting -= 1
-				break
-			}
-			worker := wp.wjPool.Get()
-			if worker == nil {
-				// pool get did not retrieve anything ...
-				log.Warn("pool get did not retrieve pool element")
-				break
-			} else {
-				log.WithFields(log.Fields{
-					"element type":  fmt.Sprintf("%T", worker),
-					"element value": fmt.Sprintf("%v", worker),
-				},
-				).Debug("pool get retrieved element")
-			}
-
-			job.pworker = worker
-			wp.q.Dequeue()
-			wp.running += 1
-			job.status = Jready
-			wp.workers[job.pworker] = job
-
-			go func() {
-				defer func() {
-					wp.poolLock("job invoker (dispatcher helper)")
-					defer wp.poolUnlock("job invoker (dispatcher helper)")
-
-					wp.workers[job.pworker] = nil
-					wp.wjPool.Put(job.pworker)
-					wp.running -= 1
-				}()
-				job.status = Jrunning
-				fRet := job.f(job.fArg, func() (shouldStop bool) {
-					job.jobRLock("job should stop checker")
-					defer job.jobRUnlock("job should stop checker")
-					shouldStop = job.shouldStop
-					return
-				})
-				job.jobWLock("job worker finishing")
-				job.fRet = fRet
-				job.status = Jfinished
-				close(job.stopChan)
-				job.jobWUnlock("job worker finishing")
-			}()
 
 		case <-wp.shouldStop:
 			log.Info("stopping requested")
@@ -200,9 +141,74 @@ func (wp *WPool) dispatcher() {
 			// TODO : what else we need to do here ?
 
 		default:
+			if wp.workNeeded2 {
+				wp.workNeeded2 = false
+				//fmt.Println(wp.q.Dump())
+				d, okd := wp.q.Peek()
+				if !okd {
+					// queue is empty
+					break
+				}
+				job, okj := d.(*WorkerJob)
+				if !okj {
+					log.WithFields(log.Fields{
+						"element type":  fmt.Sprintf("%T", d),
+						"element value": fmt.Sprintf("%v", d),
+					},
+					).Warn("queued element is not a *WorkerJob")
+					wp.q.Dequeue()
+					wp.waiting -= 1
+					break
+				}
+				worker := wp.wjPool.Get()
+				if worker == nil {
+					// pool get did not retrieve anything ...
+					log.Warn("pool get did not retrieve pool element")
+					break
+				} else {
+					log.WithFields(log.Fields{
+						"element type":  fmt.Sprintf("%T", worker),
+						"element value": fmt.Sprintf("%v", worker),
+					},
+					).Debug("pool get retrieved element")
+				}
+
+				job.pworker = worker
+				wp.q.Dequeue()
+				wp.waiting -= 1
+				wp.running += 1
+				job.status = Jready
+				wp.workers[job.pworker] = job
+
+				go func() {
+					defer func() {
+						wp.poolLock("job invoker (dispatcher helper)")
+						defer wp.poolUnlock("job invoker (dispatcher helper)")
+
+						wp.workers[job.pworker] = nil
+						wp.wjPool.Put(job.pworker)
+						wp.running -= 1
+						//wp.updateWork()
+					}()
+					job.status = Jrunning
+					fRet := job.f(job.fArg, func() (shouldStop bool) {
+						job.jobRLock("job should stop checker")
+						defer job.jobRUnlock("job should stop checker")
+						shouldStop = job.shouldStop
+						return
+					})
+					//fmt.Printf(":")
+					job.jobWLock("job worker finishing")
+					job.fRet = fRet
+					job.status = Jfinished
+					close(job.stopChan)
+					job.jobWUnlock("job worker finishing")
+				}()
+				break
+			}
 			log.Info("passed")
 			wp.poolUnlock("dispatching idle sleep")
-			time.Sleep(time.Second)
+			time.Sleep(100 * time.Millisecond)
 			wp.poolLock("dispatching idle sleep")
 			wp.updateWork()
 		}
@@ -220,7 +226,6 @@ func NewWPool(workersCount uint) (wp *WPool, err error) {
 	wp.maxWorkers = workersCount
 	wp.shouldStop = make(chan struct{})
 	wp.stopped = make(chan struct{})
-	wp.workNeeded = make(chan struct{}, wp.maxWorkers)
 	wp.workers = make(map[poolWorker]*WorkerJob)
 
 	wp.wjPool = sync.Pool{
@@ -280,7 +285,7 @@ func (wp *WPool) updateWork() {
 			"running":     wp.running,
 			"max workers": wp.maxWorkers,
 		}).Debug("work is needed")
-		wp.workNeeded <- struct{}{}
+		wp.workNeeded2 = true
 	}
 }
 
