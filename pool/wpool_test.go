@@ -248,6 +248,93 @@ func TestMultipleJobsQueue(t *testing.T) {
 	checkPoolDispose(t, wp)
 }
 
+func TestMultipleJobsQueueWithingJobs(t *testing.T) {
+	wp := startCheckPool(t, 10)
+
+	var hello [10]bool
+	var hello2 [10]bool
+	var hellook bool
+
+	chello := sync.NewCond(&sync.Mutex{})
+
+	for i := 0; i < 10; i++ {
+		msg := fmt.Sprintf("hello "+t.Name()+" %d", i+1)
+		y := i
+		fmt.Printf("### queueing job %d\n", i+1)
+		checkJobQueue(t, wp, func(j interface{}, shouldStop CheckStop) interface{} {
+			checkJobQueue(t, wp, func(k interface{}, shouldStop2 CheckStop) interface{} {
+				z, _ := k.(int)
+				hello2[z] = true
+				fmt.Println(msg+"**")
+				return nil
+			}, y)
+			chello.L.Lock()
+			chello.Wait()
+			chello.L.Unlock()
+			fmt.Println(msg)
+			hello[y] = true
+			return nil
+		}, "")
+	}
+
+	startCheckDispatcher(t, wp)
+
+	time.Sleep(1 * time.Second)
+
+	chello.Broadcast()
+
+	cfinish := sync.NewCond(&sync.Mutex{})
+
+	var stopchecking bool
+
+	// finish it even if not finished
+	timerStop := time.AfterFunc(5*time.Second, func() {
+		stopchecking = true
+		cfinish.Signal()
+
+	})
+
+	go func() {
+		for !stopchecking {
+			select {
+			case <-time.After(1 * time.Second):
+			}
+			var ok bool = true
+			// check we did ok
+			for _, i := range hello {
+				ok = ok && i
+			}
+			for _, i := range hello2 {
+				ok = ok && i
+			}
+			hellook = ok
+			if ok {
+				timerStop.Stop()
+				cfinish.Signal()
+				break
+			}
+		}
+	}()
+
+	cfinish.L.Lock()
+	cfinish.Wait()
+	cfinish.L.Unlock()
+
+	stopCheckDispatcher(t, wp, func() {
+		fmt.Println("dispatcher stopped")
+		cfinish.Signal()
+	})
+	if !hellook {
+		t.Errorf("not all hellos finished: hello %v, hello2: %v", hello, hello2)
+	}
+
+	cfinish.L.Lock()
+	cfinish.Wait()
+	cfinish.L.Unlock()
+
+	checkPoolDispose(t, wp)
+}
+
 func TestWPool_Dispose(t *testing.T) {
 	wp := startCheckPool(t, 10)
 
