@@ -33,6 +33,15 @@ const (
 	Jinvalid
 )
 
+const (
+	PanicLevel log.Level = log.PanicLevel
+	FatalLevel log.Level = log.FatalLevel
+	ErrorLevel log.Level = log.ErrorLevel
+	WarnLevel  log.Level = log.WarnLevel
+	InfoLevel  log.Level = log.InfoLevel
+	DebugLevel log.Level = log.DebugLevel
+)
+
 var workerpoolLogLevel log.Level = log.ErrorLevel
 
 func WorkerPoolSetLogLevel(level log.Level) {
@@ -277,6 +286,15 @@ func (wp *WPool) PoolStatus() (status PoolStatus) {
 	return wp.status
 }
 
+// get the pool status
+func (wp *WPool) PoolStats() (stats string) {
+	wp.poolLock("PoolStats")
+	defer wp.poolUnlock("PoolStats")
+
+	stats += fmt.Sprintf("running: %v, waiting: %v, created: %v", wp.running, wp.waiting, wp.workerCreated)
+	return
+}
+
 func (wp *WPool) updateWork() {
 	if wp.waiting > 0 && wp.running < wp.maxWorkers {
 		log.WithFields(log.Fields{
@@ -326,7 +344,9 @@ func (wp *WPool) StopDispatcher(stoppedFnCb func()) (ok bool, err error) {
 		//wp.poolLock("StopDispatcher helper")
 		defer func() {
 			//wp.poolUnlock("StopDispatcher helper")
-			stoppedFnCb()
+			if stoppedFnCb != nil {
+				stoppedFnCb()
+			}
 		}()
 
 		wp.shouldStop <- struct{}{}
