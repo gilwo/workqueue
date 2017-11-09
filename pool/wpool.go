@@ -197,7 +197,7 @@ func (wp *WPool) dispatcher() {
 						wp.workers[job.pworker] = nil
 						wp.wjPool.Put(job.pworker)
 						wp.running -= 1
-						//wp.updateWork()
+						wp.updateWork()
 					}()
 					job.status = Jrunning
 					fRet := job.f(job.fArg, func() (shouldStop bool) {
