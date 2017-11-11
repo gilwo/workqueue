@@ -360,7 +360,12 @@ func TestWPoolDispatcher(t *testing.T) {
 	dispatcherStopCh := make(chan (struct{}))
 	wp := startCheckPool(t, 10)
 
-	wp.wjPool = sync.Pool{}
+	for {
+		if e, _ := wp.wjQ.Dequeue() ; e == nil {
+			break
+		}
+	}
+	wp.wjQ.Dispose()
 
 	startCheckDispatcher(t, wp)
 
@@ -375,7 +380,7 @@ func TestWPoolDispatcher(t *testing.T) {
 
 	checkJobQueue(t, wp, f, "")
 
-	time.Sleep(1 * time.Second)
+	time.Sleep(1 * time.Millisecond)
 
 	stopCheckDispatcher(t, wp, func() { close(dispatcherStopCh) })
 
