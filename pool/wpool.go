@@ -175,6 +175,7 @@ func (wp *WPool) dispatcher() {
 				if worker == nil {
 					// pool get did not retrieve anything ...
 					log.Warn("pool get did not retrieve pool element")
+					wp.updateWork()
 					break
 				} else {
 					log.WithFields(log.Fields{
@@ -191,7 +192,6 @@ func (wp *WPool) dispatcher() {
 				wp.running += 1
 				job.status = Jready
 				wp.workers[job.pworker] = job
-				wp.updateWork()
 
 				// job invoker
 				go func() {
@@ -236,6 +236,7 @@ func (wp *WPool) dispatcher() {
 					close(job.stopChan)
 					job.jobWUnlock("job worker finishing")
 				}()
+				wp.updateWork()
 			} else {
 				log.Info("passed")
 				wp.poolUnlock("dispatching idle sleep")
@@ -243,11 +244,6 @@ func (wp *WPool) dispatcher() {
 				wp.poolLock("dispatching idle sleep")
 				wp.updateWork()
 			}
-			log.Info("passed")
-			wp.poolUnlock("dispatching idle sleep")
-			time.Sleep(100 * time.Millisecond)
-			wp.poolLock("dispatching idle sleep")
-			wp.updateWork()
 		}
 		wp.poolUnlock("dispatching loop select")
 	}
@@ -335,7 +331,7 @@ func (wp *WPool) PoolStats() (stats string) {
 func (wp *WPool) updateWork() {
 	if wp.waiting > 0 && wp.running < wp.maxWorkers {
 		log.WithFields(log.Fields{
-			"status":     wp.status,
+			"status":      wp.status,
 			"waiting":     wp.waiting,
 			"running":     wp.running,
 			"max workers": wp.maxWorkers,
@@ -423,7 +419,7 @@ func (wp *WPool) JobQueue(job *WorkerJob) (err error) {
 	if wp.q == nil || job == nil || job.status == Jinvalid || job.pool != nil {
 		log.WithFields(log.Fields{
 			"pool": wp,
-			"job": job,
+			"job":  job,
 		}).Warn("job cannot be queued")
 		err = fmt.Errorf("job cannot be queued")
 		return
@@ -492,7 +488,7 @@ func (job *WorkerJob) JobDispose() (err error) {
 	if job.pool != nil && job.status != Junassigned {
 		log.WithFields(log.Fields{
 			"job status": job.status,
-			"job": job,
+			"job":        job,
 		}).Warn("job cannot be disposed now")
 		err = fmt.Errorf("unable to dispose job")
 	}
