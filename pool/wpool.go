@@ -98,10 +98,11 @@ type WPool struct {
 	workerCreated uint
 	shouldStop    chan struct{}
 	stopped       chan struct{}
-	wjPool        sync.Pool
 	lock          *sync.Mutex
 	workNeeded2   bool
 	workers       map[poolWorker]*WorkerJob
+	workersCount  int
+	wjQ           *workerqueue.Queue
 }
 
 func (wp *WPool) maintStopAllWorkers() {
@@ -170,7 +171,7 @@ func (wp *WPool) dispatcher() {
 					wp.waiting -= 1
 					break
 				}
-				worker := wp.wjPool.Get()
+				worker, _ := wp.wjQ.Dequeue()
 				if worker == nil {
 					// pool get did not retrieve anything ...
 					log.Warn("pool get did not retrieve pool element")
@@ -182,6 +183,7 @@ func (wp *WPool) dispatcher() {
 					},
 					).Debug("pool get retrieved element")
 				}
+				wp.workersCount += 1
 
 				job.pworker = worker
 				wp.q.Dequeue()
@@ -234,7 +236,12 @@ func (wp *WPool) dispatcher() {
 					close(job.stopChan)
 					job.jobWUnlock("job worker finishing")
 				}()
-				break
+			} else {
+				log.Info("passed")
+				wp.poolUnlock("dispatching idle sleep")
+				time.Sleep(100 * time.Millisecond)
+				wp.poolLock("dispatching idle sleep")
+				wp.updateWork()
 			}
 			log.Info("passed")
 			wp.poolUnlock("dispatching idle sleep")
@@ -258,17 +265,19 @@ func NewWPool(workersCount uint) (wp *WPool, err error) {
 	wp.stopped = make(chan struct{})
 	wp.workers = make(map[poolWorker]*WorkerJob)
 
-	wp.wjPool = sync.Pool{
-		New: func() interface{} {
-			wp.workerCreated += 1
-			//fmt.Printf("new pool object called, total %d\n", wp.workerCreated)
-			log.WithFields(log.Fields{
-				"created workers": wp.workerCreated,
-			}).Debug("new pool object called")
-			return new(poolWorker)
-		},
-	}
 	wp.lock = &sync.Mutex{}
+
+	wp.wjQ, err = workerqueue.NewQueue(-1)
+	if err != nil {
+		log.WithFields(log.Fields{"queue error": err}).Error("failed to allocate queue for pool")
+		err = fmt.Errorf("failed to allocate worker pool queue")
+		wp = nil
+		return
+	}
+	for i := uint(0); i < wp.maxWorkers ; i++ {
+		wp.wjQ.Enqueue(new(poolWorker))
+		wp.workerCreated += 1
+	}
 	wp.q, err = workerqueue.NewQueue(-1)
 	if err == nil {
 		wp.status = Pready
@@ -296,6 +305,9 @@ func (wp *WPool) Dispose() (ok bool, err error) {
 	wp.q.Dispose()
 	wp.q = nil
 
+	wp.wjQ.Dispose()
+	wp.wjQ = nil
+
 	return
 }
 
@@ -307,13 +319,17 @@ func (wp *WPool) PoolStatus() (status PoolStatus) {
 	return wp.status
 }
 
+func (wp *WPool) poolStats() (stats string) {
+	return fmt.Sprintf("running: %v, waiting: %v, created: %v, workerscount %v",
+		wp.running, wp.waiting, wp.workerCreated, wp.workersCount)
+}
+
 // get the pool status
 func (wp *WPool) PoolStats() (stats string) {
 	wp.poolLock("PoolStats")
 	defer wp.poolUnlock("PoolStats")
 
-	stats += fmt.Sprintf("running: %v, waiting: %v, created: %v", wp.running, wp.waiting, wp.workerCreated)
-	return
+	return wp.poolStats()
 }
 
 func (wp *WPool) updateWork() {
