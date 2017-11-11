@@ -67,7 +67,7 @@ func init() {
 type CheckStop func() bool
 
 // type for job function to queue
-type JobFunc func(interface{}, CheckStop) interface{}
+type JobFunc func(interface{}, *WorkerJob, CheckStop) interface{}
 
 type poolWorker interface{}
 
@@ -117,6 +117,7 @@ func (wp *WPool) maintFlushJobQueue() {
 	log.WithFields(log.Fields{"current workers count": wp.workerCreated}).Debug("flushing all workers")
 	for k, v := range wp.workers {
 		if v != nil {
+			v.JobDispose()
 			wp.workers[k] = nil
 		}
 	}
@@ -188,19 +189,39 @@ func (wp *WPool) dispatcher() {
 				wp.running += 1
 				job.status = Jready
 				wp.workers[job.pworker] = job
+				wp.updateWork()
 
+				// job invoker
 				go func() {
-					defer func() {
-						wp.poolLock("job invoker (dispatcher helper)")
-						defer wp.poolUnlock("job invoker (dispatcher helper)")
 
+					//wp.poolLock("pre invoking")
+					//job.jobWLock("pre invoking")
+					//job.pworker = worker
+					//wp.q.Dequeue()
+					//wp.waiting -= 1
+					//wp.running += 1
+					//job.status = Jready
+					//wp.workers[job.pworker] = job
+					//job.jobWUnlock("pre invoking")
+					//wp.updateWork()
+					//wp.poolUnlock("pre invoking")
+
+					//fmt.Println(wp.poolStats())
+					//fmt.Println("++")
+					defer func() {
+						wp.poolLock("pool job invoker finisher (dispatcher helper)")
+						defer wp.poolUnlock("pool job invoker finsher (dispatcher helper)")
+
+						//fmt.Println("--")
 						wp.workers[job.pworker] = nil
-						wp.wjPool.Put(job.pworker)
+						wp.workersCount -= 1
+						//wp.wjPool.Put(job.pworker)
+						wp.wjQ.Enqueue(job.pworker)
 						wp.running -= 1
 						wp.updateWork()
 					}()
 					job.status = Jrunning
-					fRet := job.f(job.fArg, func() (shouldStop bool) {
+					fRet := job.f(job.fArg, job, func() (shouldStop bool) {
 						job.jobRLock("job should stop checker")
 						defer job.jobRUnlock("job should stop checker")
 						shouldStop = job.shouldStop

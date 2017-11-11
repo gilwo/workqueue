@@ -56,9 +56,9 @@ func stopCheckDispatcher(tb interface{}, wp *WPool, f func()) {
 	}
 }
 
-func createJobFunc(msg string) (f func(interface{}, CheckStop) interface{}, ch chan (struct{})) {
+func createJobFunc(msg string) (f func(interface{}, *WorkerJob, CheckStop) interface{}, ch chan (struct{})) {
 	ch = make(chan (struct{}))
-	f = func(i interface{}, shouldStop CheckStop) interface{} {
+	f = func(i interface{}, j *WorkerJob, shouldStop CheckStop) interface{} {
 		fmt.Printf(msg)
 		ch <- struct{}{}
 		return nil
@@ -87,7 +87,7 @@ func TestNewPool(t *testing.T) {
 
 	var hello bool
 
-	f := func(i interface{}, shouldStop CheckStop) interface{} {
+	f := func(i interface{}, job *WorkerJob, shouldStop CheckStop) interface{} {
 		fmt.Printf("hello " + t.Name() + "\n")
 		hello = true
 		timerStopDispatcher.Stop()
@@ -126,7 +126,7 @@ func TestJobFailToFinishInTime(t *testing.T) {
 
 	var hello bool
 
-	f := func(i interface{}, shouldStop CheckStop) interface{} {
+	f := func(i interface{}, job *WorkerJob, shouldStop CheckStop) interface{} {
 		fmt.Printf("hello " + t.Name() + "\n")
 		time.Sleep(2 * time.Second)
 		hello = true
@@ -183,7 +183,7 @@ func TestMultipleJobsQueue(t *testing.T) {
 		msg := fmt.Sprintf("hello "+t.Name()+" %d", i+1)
 		y := i
 		fmt.Printf("### queueing job %d\n", i+1)
-		checkJobQueue(t, wp, func(j interface{}, shouldStop CheckStop) interface{} {
+		checkJobQueue(t, wp, func(j interface{}, job *WorkerJob, shouldStop CheckStop) interface{} {
 			chello.L.Lock()
 			chello.Wait()
 			chello.L.Unlock()
@@ -261,8 +261,8 @@ func TestMultipleJobsQueueWithingJobs(t *testing.T) {
 		msg := fmt.Sprintf("hello "+t.Name()+" %d", i+1)
 		y := i
 		fmt.Printf("### queueing job %d\n", i+1)
-		checkJobQueue(t, wp, func(j interface{}, shouldStop CheckStop) interface{} {
-			checkJobQueue(t, wp, func(k interface{}, shouldStop2 CheckStop) interface{} {
+		checkJobQueue(t, wp, func(j interface{}, job *WorkerJob, shouldStop CheckStop) interface{} {
+			checkJobQueue(t, wp, func(k interface{}, job *WorkerJob, shouldStop2 CheckStop) interface{} {
 				z, _ := k.(int)
 				hello2[z] = true
 				fmt.Println(msg+"**")
@@ -432,7 +432,7 @@ func BenchmarkWPool_JobQueue(b *testing.B) {
 	wp := startCheckPool(b, 10)
 	startCheckDispatcher(b, wp)
 
-	f := func(i interface{}, shouldStop CheckStop) interface{} {
+	f := func(i interface{}, job *WorkerJob, shouldStop CheckStop) interface{} {
 		foo := true
 		jobFinished <- struct{}{}
 		return foo
