@@ -8,3 +8,7 @@ features:
 * unlimited queue for functions
 * limited resources - limit workers
 * each job function run in a go routine
+
+### job control
+* able to stop job and get notification when stopped
+* keep correlation between job and pool
