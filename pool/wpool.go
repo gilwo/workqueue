@@ -481,8 +481,8 @@ func (job *WorkerJob) JobDispose() (err error) {
 	defer func () {
 		if err == nil {
 			job.status = Jinvalid
-			job.jobWUnlock("JobDispose")
 		}
+		job.jobWUnlock("JobDispose")
 	}()
 
 	if job.pool != nil && job.status != Junassigned {
