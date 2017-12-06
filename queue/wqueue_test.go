@@ -15,7 +15,7 @@ func TestNewQueue(t *testing.T) {
 	}
 	if _, err := NewQueue(1); err != nil {
 		act := err.Error()
-		exp := "not supprting capacity > 0"
+		exp := "not supporting capacity > 0"
 		if act != exp {
 			t.Errorf("failed queue creation reason: expected : '%s', actual: '%s'",
 				act, act)
