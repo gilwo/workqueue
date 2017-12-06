@@ -214,6 +214,22 @@ func (wp *WPool) dispatcher() {
 						wp.poolLock("pool job invoker finisher (dispatcher helper)")
 						defer wp.poolUnlock("pool job invoker finsher (dispatcher helper)")
 
+						// reminder: help to resolve a hard bug if panic because the defer happened after
+						// the pool is not in running state ...
+						//defer func() {
+						//	z := recover()
+						//	if z != nil {
+						//		fmt.Println(z)
+						//	}
+						//}()
+
+						if wp.status != Prunning {
+							// nothing to do here because the pool is not really working
+							// its state is at some stage of being stopped or already stopped
+							// just return from here
+							return
+						}
+
 						//fmt.Println("--")
 						wp.workers[job.pworker] = nil
 						wp.workersCount -= 1
